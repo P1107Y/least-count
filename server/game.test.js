@@ -74,9 +74,11 @@ test('negative caller is never penalised, even when someone is lower', () => {
   assert.deepEqual(r.scores, { A: -1, B: -10, C: 6 });
 });
 
-test('caller at exactly 0 who is beaten still takes the penalty', () => {
-  const r = score({ A: [c('5'), c('5', 'H'), c('10')], B: [c('5', 'D')] }, '5');
-  assert.deepEqual(r.scores, { A: 50, B: -5 });
+test('caller at exactly 0 is not penalised when someone is lower', () => {
+  // Joker is 5: A holds 5, 5, 10 = 0; B holds A of joker rank... B holds 5 + 4 = -1.
+  const r = score({ A: [c('5'), c('5', 'H'), c('10')], B: [c('5', 'D'), c('4')] }, '5');
+  assert.equal(r.result, 'exempt');
+  assert.deepEqual(r.scores, { A: 0, B: -1 });
 });
 
 test('acceptance 8: caller with 0 scores 0', () => {
@@ -337,9 +339,13 @@ test('bots only make legal moves over many rounds', () => {
         assert.ok(G.show(game, id).ok, 'show should be legal');
         continue;
       }
+      if (d.action === 'drop') {
+        assert.ok(G.drop(game, id).ok, 'drop should be legal');
+        continue;
+      }
       assert.ok(G.discard(game, id, d.discard).ok, 'discard should be legal');
       assert.ok(G.draw(game, id, d.draw).ok, 'draw should be legal');
-      game.seats.forEach((s) => assert.ok(s.eliminated || s.hand.length > 0));
+      game.seats.forEach((s) => assert.ok(s.eliminated || s.dropped || s.hand.length > 0));
     }
     assert.equal(game.phase, 'finished', `${diff} bots should finish a game`);
   }
@@ -350,4 +356,70 @@ test('display names', () => {
   assert.ok(checkName('J'));
   assert.ok(checkName('x'.repeat(16)));
   assert.ok(checkName('Sh1thead'));
+});
+
+// ---------- drop ----------
+
+test('drop: only on your first turn, before discarding', () => {
+  const game = newGame(3);
+  const first = game.turn.seatId;
+  assert.equal(G.canDrop(game, first).ok, true);
+  G.discard(game, first, [G.getSeat(game, first).hand[0].id]);
+  assert.equal(G.canDrop(game, first).ok, false, 'not after discarding');
+  G.draw(game, first, 'deck');
+  playTurn(game);
+  playTurn(game);
+  assert.equal(game.turn.seatId, first);
+  assert.equal(G.canDrop(game, first).ok, false, 'not on a later turn');
+});
+
+test('drop costs half the penalty and dropped seats are skipped', () => {
+  for (const [penalty, expected] of [[50, 25], [40, 20], [45, 23]]) {
+    const game = newGame(3, { showPenalty: penalty });
+    const dropper = game.turn.seatId;
+    assert.ok(G.drop(game, dropper).ok);
+    assert.equal(G.getSeat(game, dropper).hand.length, 0);
+    // Play until it would be the dropper's turn again: it never is.
+    for (let i = 0; i < 6; i += 1) {
+      assert.notEqual(game.turn.seatId, dropper);
+      playTurn(game);
+    }
+    const caller = game.turn.seatId;
+    const other = game.seats.find((x) => x.id !== caller && x.id !== dropper);
+    rig(game, caller, handOf(4));
+    rig(game, other.id, handOf(12));
+    game.jokerRank = 'Q';
+    const r = G.show(game, caller);
+    assert.equal(r.result, 'success');
+    assert.equal(r.scores[dropper], expected, `penalty ${penalty}`);
+    assert.equal(r.scores[caller], -4);
+    assert.equal(r.scores[other.id], 12);
+  }
+});
+
+test('a dropped player with a low hand does not spoil a show', () => {
+  const game = newGame(3);
+  const dropper = game.turn.seatId;
+  G.drop(game, dropper);
+  playTurn(game);
+  playTurn(game);
+  const caller = game.turn.seatId;
+  const other = game.seats.find((x) => x.id !== caller && x.id !== dropper);
+  rig(game, caller, handOf(9));
+  rig(game, other.id, handOf(20));
+  game.jokerRank = 'Q';
+  assert.equal(G.show(game, caller).result, 'success');
+});
+
+test('when everyone else drops the last player wins the round with 0', () => {
+  const game = newGame(3);
+  const a = game.turn.seatId;
+  G.drop(game, a);
+  const b = game.turn.seatId;
+  const r = G.drop(game, b);
+  assert.ok(r.ok && r.roundOver);
+  assert.equal(game.phase, 'summary');
+  const last = game.seats.find((x) => x.id !== a && x.id !== b);
+  assert.deepEqual(game.history[0].scores, { [a]: 25, [b]: 25, [last.id]: 0 });
+  assert.equal(game.lastShow.result, 'all-dropped');
 });

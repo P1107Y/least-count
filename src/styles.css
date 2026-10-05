@@ -2312,3 +2312,24 @@ h3,
 .felt {
   overflow: visible;
 }
+
+/* ================= drop ================= */
+.drop-btn {
+  background: linear-gradient(180deg, #3b2a55, #241838);
+  border-color: #9a7bff;
+  color: #efe8ff;
+  font-family: var(--display);
+  letter-spacing: 0.08em;
+}
+.drop-btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, #4a3570, #2e1f48);
+  border-color: #b9a4ff;
+}
+.badge.dropped {
+  color: #d6c8ff;
+  border-color: rgba(185, 164, 255, 0.5);
+  background: rgba(122, 60, 255, 0.15);
+}
+.result-all-dropped .result-word {
+  color: #b9a4ff;
+}

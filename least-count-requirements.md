@@ -16,12 +16,13 @@ Confirmed on 3 Oct 2026.
 | R2 | Winner's score | Lowest player scores **minus their count** (count 10 → −10) |
 | R3 | Joker value | Joker cards count as **minus their face value** (joker 5 → −5, joker K → −10, joker A → −1) |
 | R4 | Tie on Show | If anyone ties the caller, the Show fails and the caller takes the penalty |
-| R5 | Penalty exemption | The penalty is waived when the caller's count is **below zero** (which includes an all-joker hand). The caller then scores their own negative count even if someone else is lower |
+| R5 | Penalty exemption | The penalty is waived when the caller's count is **zero or below** (which includes an all-joker hand). The caller then scores their own count even if someone else is lower |
 | R6 | Discarding several cards | Cards must be the **same rank** (two 8s, three Kings). J + Q does not qualify even though both are worth 10 |
 | R7 | Deck | One 52-card deck for up to 4 players, two decks for 5–8 players. No printed jokers |
 | R8 | Deck runs out | The discarded cards are shuffled into a new closed deck, keeping the latest discard aside |
 | R9 | Sequences | Not supported (only same-rank multi-discards) |
 | R10 | Show on first turn | Not allowed. A player can call Show from their second turn of the round |
+| R24 | Drop | On their first turn of a round, before discarding, a player may drop: they fold and score half the Show penalty (rounded up). Dropped players skip the rest of the round and are not compared at Show. If all but one player drop, that player scores 0 and the round ends |
 | R11 | Show limit | No minimum or maximum count is needed to call Show |
 | R12 | Drawing | A player always draws one card after discarding, even if the discard matches the open card |
 | R13 | Draw sources | Only the closed deck, or the **latest single card** discarded by the previous player |

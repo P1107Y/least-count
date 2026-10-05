@@ -20,7 +20,8 @@ const displayName = (seat) => (seat ? (seat.kind === 'human' && seat.controller 
 const RESULT_TEXT = {
   success: 'Show succeeded',
   failed: 'Show failed — penalty',
-  exempt: 'Show failed — negative hand, no penalty',
+  exempt: 'Show failed — zero or negative hand, no penalty',
+  'all-dropped': 'everyone else dropped',
 };
 
 const TAKEOVER_TEXT = {
@@ -80,6 +81,7 @@ function NamePlate({ seat, gameSeat, isTurn, glow, remaining, duration, isHostSe
         {seat.kind === 'human' && seat.controller === 'bot' && <span className="badge bot">Bot playing</span>}
         {seat.kind === 'human' && !seat.connected && seat.controller === 'human' && <span className="badge offline">Reconnecting</span>}
         {gameSeat.eliminated && <span className="badge out">Eliminated</span>}
+        {gameSeat.dropped && !gameSeat.eliminated && <span className="badge dropped">Dropped</span>}
         {isTurn && <TurnClock remaining={remaining} duration={duration} />}
         {children}
       </div>
@@ -115,14 +117,25 @@ function RoundSummary({ g, seatsById, myId, me, send, now, clockOffset }) {
   const waitingFor = Object.values(seatsById)
     .filter((s) => s.kind === 'human' && s.connected && s.controller === 'human' && !g.continueVotes.includes(s.id))
     .map((s) => s.name);
-  const entries = [...show.entries].sort((a, b) => (a.id === show.callerId ? -1 : b.id === show.callerId ? 1 : a.count - b.count));
+  const entries = [...show.entries].sort(
+    (a, b) => (a.id === show.callerId ? -1 : b.id === show.callerId ? 1 : Number(a.dropped) - Number(b.dropped) || a.count - b.count),
+  );
+  const roundWinner = show.result === 'all-dropped' ? show.entries.find((e) => !e.dropped) : null;
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label={`Round ${show.round} summary`}>
       <div className={`summary result-${show.result}`}>
         <header className="summary-head">
           <span className="eyebrow">Round {show.round} · Joker {RANK_NAME[show.jokerRank] || show.jokerRank}</span>
           <h2>
-            {displayName(caller)} called Show — <span className="result-word">{RESULT_TEXT[show.result]}</span>
+            {roundWinner ? (
+              <>
+                {displayName(seatsById[roundWinner.id])} takes the round — <span className="result-word">{RESULT_TEXT[show.result]}</span>
+              </>
+            ) : (
+              <>
+                {displayName(caller)} called Show — <span className="result-word">{RESULT_TEXT[show.result]}</span>
+              </>
+            )}
           </h2>
         </header>
         <table className="summary-table">
@@ -145,13 +158,14 @@ function RoundSummary({ g, seatsById, myId, me, send, now, clockOffset }) {
                     {e.id === show.callerId && <span className="badge caller">Caller</span>}
                   </th>
                   <td>
+                    {e.dropped && <span className="badge dropped">Dropped · +{show.dropPoints}</span>}
                     <div className="reveal-hand">
                       {sortHand(e.hand, show.jokerRank).map((card, i) => (
                         <PlayingCard key={card.id} card={card} jokerRank={show.jokerRank} size="sm" className="flip-in" style={{ animationDelay: `${row * 120 + i * 60}ms` }} />
                       ))}
                     </div>
                   </td>
-                  <td className="num">{e.count}</td>
+                  <td className="num">{e.dropped ? '—' : e.count}</td>
                   <td className={`num score ${e.score < 0 ? 'neg' : ''} ${e.id === show.callerId && show.result === 'failed' ? 'penalty' : ''}`}>{signed(e.score)}</td>
                   <td className="num">
                     {e.total}
@@ -210,6 +224,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
   const [selected, setSelected] = useState([]);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [kickTarget, setKickTarget] = useState(null);
+  const [confirmDrop, setConfirmDrop] = useState(false);
   const [toasts, setToasts] = useState([]);
   const [dealKey, setDealKey] = useState(g.round);
 
@@ -248,6 +263,10 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
       else if (e.kind === 'takeover') notes.push(`${seatsById[e.seatId]?.name} ${TAKEOVER_TEXT[e.reason] || 'was replaced by a bot'}.`);
       else if (e.kind === 'timeout' && e.seatId === myId) notes.push('Time ran out — your highest card was discarded and you drew from the deck.');
       else if (e.kind === 'reclaim') notes.push(`${seatsById[e.seatId]?.name} took their seat back.`);
+      else if (e.kind === 'drop') {
+        play('discard');
+        notes.push(`${e.seatId === myId ? 'You' : who} dropped this round (+${e.points}).`);
+      }
       else if (e.kind === 'host') notes.push(`${who} is now the host.`);
     });
     if (notes.length) {
@@ -304,6 +323,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
   else if (!iControl) hint = 'A bot is playing your seat.';
   else if (g.phase !== 'playing') hint = '';
   else if (!myTurn) hint = `Waiting for ${displayName(seatsById[turnSeatId])}…`;
+  else if (phase === 'discard' && g.canDrop.ok) hint = `Your first turn — discard to play on, or Drop this round for +${g.dropPoints}.`;
   else if (phase === 'discard') hint = 'Your turn — select one card, or several of the same rank, then Discard. Or call Show.';
   else hint = takeable ? `Now draw one card: the closed deck, or take the ${cardLabel(takeable, jokerRank)}.` : 'Now draw one card from the closed deck.';
 
@@ -471,6 +491,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
                 />
               ))}
               {!hand.length && myGame?.eliminated && <div className="hand-empty">Eliminated</div>}
+              {!hand.length && myGame?.dropped && !myGame?.eliminated && <div className="hand-empty">You dropped this round — back in next round</div>}
             </div>
             <p className="hint" aria-live="polite">
               {myTurn && phase === 'discard' && selectedCards.length > 0 && discardProblem ? <span className="hint-error">{discardProblem}</span> : hint}
@@ -494,18 +515,26 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
                 <button type="button" className="btn primary" onClick={doDiscard} disabled={!myTurn || phase !== 'discard' || !!discardProblem} title={myTurn ? discardProblem || '' : ''}>
                   Discard{selectedCards.length > 1 ? ` ${selectedCards.length}` : ''}
                 </button>
-                <button
-                  type="button"
-                  className="btn show-btn"
-                  onClick={() => send({ type: 'show' })}
-                  disabled={!myTurn || !g.canShow.ok}
-                  title={myTurn && !g.canShow.ok ? g.canShow.reason : 'Call Show if you think your count is the lowest'}
-                >
-                  Show
-                </button>
+                {myTurn && g.canDrop.ok ? (
+                  // First turn of the round: Show isn't allowed yet, so Drop takes its place.
+                  <button type="button" className="btn drop-btn" onClick={() => setConfirmDrop(true)} title={`Sit out this round for +${g.dropPoints}`}>
+                    Drop · +{g.dropPoints}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn show-btn"
+                    onClick={() => send({ type: 'show' })}
+                    disabled={!myTurn || !g.canShow.ok}
+                    title={myTurn && !g.canShow.ok ? g.canShow.reason : 'Call Show if you think your count is the lowest'}
+                  >
+                    Show
+                  </button>
+                )}
               </>
             )}
-            {myTurn && phase === 'discard' && !g.canShow.ok && <span className="action-note">{g.canShow.reason}</span>}
+            {myTurn && phase === 'discard' && g.canDrop.ok && <span className="action-note">Show opens from your next turn.</span>}
+            {myTurn && phase === 'discard' && !g.canDrop.ok && !g.canShow.ok && <span className="action-note">{g.canShow.reason}</span>}
           </div>
         </div>
       </section>
@@ -520,6 +549,32 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
             onLeave();
           }}
         />
+      )}
+
+      {confirmDrop && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Drop this round" onClick={() => setConfirmDrop(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Drop this round?</h3>
+            <p>
+              You fold your hand, score <strong>+{g.dropPoints}</strong> (half the {room.settings.showPenalty} penalty), and sit out until the next round.
+            </p>
+            <div className="row-actions">
+              <button type="button" className="btn ghost" onClick={() => setConfirmDrop(false)} autoFocus>
+                Keep playing
+              </button>
+              <button
+                type="button"
+                className="btn drop-btn"
+                onClick={() => {
+                  send({ type: 'drop' });
+                  setConfirmDrop(false);
+                }}
+              >
+                Drop · +{g.dropPoints}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {kickTarget && (

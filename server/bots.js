@@ -16,7 +16,7 @@ const rankGroups = (hand) => {
   return [...groups.values()];
 };
 
-const opponents = (view) => view.seats.filter((s) => s.id !== view.seatId && !s.eliminated);
+const opponents = (view) => view.seats.filter((s) => s.id !== view.seatId && !s.eliminated && !s.dropped);
 
 // Discard options: every rank group, valued by how much it lowers the count.
 const discardOptions = (hand, jokerRank) =>
@@ -28,7 +28,7 @@ const forcedJokerDiscard = (hand, jokerRank) =>
 
 const nextSeatId = (view) => {
   const order = view.seatOrder;
-  const live = new Set(view.seats.filter((s) => !s.eliminated).map((s) => s.id));
+  const live = new Set(view.seats.filter((s) => !s.eliminated && !s.dropped).map((s) => s.id));
   const i = order.indexOf(view.seatId);
   for (let step = 1; step <= order.length; step += 1) {
     const id = order[(i + step) % order.length];
@@ -164,12 +164,20 @@ const decideHard = (view, penalty) => {
   return { action: 'play', discard: cards.map((c) => c.id), draw: chooseDraw(view, remaining, takeableFor(view), Math.max(2, mean - 1.5)) };
 };
 
+// Drop on the first turn when the dealt hand is hopeless: a high count with no jokers to lean on.
+const shouldDrop = (view, margin) => {
+  if (!view.canDrop?.ok) return false;
+  if (view.hand.some((c) => c.rank === view.jokerRank)) return false;
+  return handCount(view.hand, view.jokerRank) >= view.dropPoints + margin;
+};
+
 export const decideBot = (view, difficulty = 'medium', { penalty = 50 } = {}) => {
   // A takeover can land mid-turn after the human already discarded.
   if (view.turn?.phase === 'draw') {
     return { action: 'play', discard: null, draw: chooseDraw(view, view.hand, takeableFor(view), 3) };
   }
   if (difficulty === 'easy') return decideEasy(view);
+  if (shouldDrop(view, difficulty === 'hard' ? 22 : 25)) return { action: 'drop' };
   if (difficulty === 'hard') return decideHard(view, penalty);
   return decideMedium(view);
 };

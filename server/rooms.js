@@ -434,6 +434,14 @@ class Room {
       }
     }
 
+    if (decision.action === 'drop') {
+      const r = G.drop(game, seat.id);
+      if (r.ok) {
+        this.afterDrop(seat, r);
+        return;
+      }
+    }
+
     if (game.turn.phase === 'discard') {
       const r = decision.discard && G.discard(game, seat.id, decision.discard);
       if (!r?.ok) {
@@ -510,6 +518,15 @@ class Room {
       G.finishGame(this.game, 'no-humans');
       this.endGame();
     }
+  }
+
+  afterDrop(seat, r) {
+    this.event('drop', { seatId: seat.id, points: G.dropPoints(this.game) });
+    if (r.roundOver) {
+      this.event('show', { seatId: null, result: 'all-dropped' });
+      this.game.lastShow.eliminated.forEach((id) => this.event('eliminated', { seatId: id }));
+    }
+    this.afterChange();
   }
 
   afterShow(seat) {
@@ -665,6 +682,16 @@ class Room {
     this.eventSeq += 1;
     const payload = { type: 'emote', id: this.eventSeq, seatId, emoji };
     this.conns.forEach((conn) => send(conn, payload));
+    return null;
+  }
+
+  drop(seatId) {
+    const err = this.requirePlayable(seatId);
+    if (err) return err;
+    const r = G.drop(this.game, seatId);
+    if (!r.ok) return r.reason;
+    this.seat(seatId).timeouts = 0;
+    this.afterDrop(this.seat(seatId), r);
     return null;
   }
 
@@ -825,6 +852,7 @@ export class RoomManager {
       discard: () => room.discard(seatId, msg.cardIds),
       draw: () => room.draw(seatId, msg.source),
       show: () => room.show(seatId),
+      drop: () => room.drop(seatId),
       continue: () => room.continueVote(seatId),
       reclaim: () => room.reclaim(seatId),
       emote: () => room.emote(seatId, msg.emoji),

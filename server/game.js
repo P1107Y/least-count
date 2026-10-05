@@ -42,12 +42,17 @@ export const createGame = ({ seats, settings }) => ({
 
 export const getSeat = (game, seatId) => game.seats.find((s) => s.id === seatId);
 export const activeSeats = (game) => game.seats.filter((s) => !s.eliminated);
+// Seats still playing this round: not eliminated and not dropped.
+export const roundSeats = (game) => game.seats.filter((s) => !s.eliminated && !s.dropped);
+// Dropping on your first turn costs half the Show penalty (50 -> 25, 40 -> 20).
+export const dropPoints = (game) => Math.ceil(game.settings.showPenalty / 2);
 
-const nextActiveIndex = (game, fromIndex) => {
+const nextActiveIndex = (game, fromIndex, skipDropped = false) => {
   const n = game.seats.length;
   for (let step = 1; step <= n; step += 1) {
     const idx = (fromIndex + step) % n;
-    if (!game.seats[idx].eliminated) return idx;
+    const seat = game.seats[idx];
+    if (!seat.eliminated && !(skipDropped && seat.dropped)) return idx;
   }
   return fromIndex;
 };
@@ -77,6 +82,7 @@ export const startRound = (game, { deck: presetDeck } = {}) => {
   game.seats.forEach((s) => {
     s.hand = [];
     s.turnsThisRound = 0;
+    s.dropped = false;
   });
 
   const order = [];
@@ -164,7 +170,7 @@ export const draw = (game, seatId, source) => {
   game.openPile.push(...game.turn.pending);
   seat.turnsThisRound += 1;
 
-  const next = nextActiveIndex(game, game.seats.indexOf(seat));
+  const next = nextActiveIndex(game, game.seats.indexOf(seat), true);
   beginTurn(game, game.seats[next].id);
   return { ok: true, card, source: source === 'open' ? 'open' : 'deck', reshuffled };
 };
@@ -193,8 +199,8 @@ export const scoreShow = (entries, callerId, jokerRank, penalty) => {
     return { result: 'success', counts, scores };
   }
 
-  // No penalty when the caller's hand is all jokers or counts below zero.
-  const exempt = isAllJokers(caller.hand, jokerRank) || callerCount < 0;
+  // No penalty when the caller's count is zero or below (this covers an all-joker hand).
+  const exempt = isAllJokers(caller.hand, jokerRank) || callerCount <= 0;
   scores[callerId] = exempt ? callerCount : penalty;
   const lowest = Math.min(...others.map((e) => counts[e.id]));
   others.forEach((e) => {
@@ -218,14 +224,19 @@ export const finishGame = (game, reason) => {
   game.ranking = computeRanking(game);
 };
 
-export const show = (game, seatId) => {
-  const check = canShow(game, seatId);
-  if (!check.ok) return check;
+export const canDrop = (game, seatId) => {
+  const err = checkTurn(game, seatId, 'discard');
+  if (err) return err;
+  if (getSeat(game, seatId).turnsThisRound > 0) return fail('You can only drop on your first turn of the round, before discarding.');
+  return { ok: true };
+};
 
+// Scores the round for every active seat; dropped seats take the drop points.
+const endRound = (game, { callerId, result, scores, counts }) => {
   const active = activeSeats(game);
-  const { result, counts, scores } = scoreShow(active, seatId, game.jokerRank, game.settings.showPenalty);
-
+  const drop = dropPoints(game);
   active.forEach((s) => {
+    if (s.dropped) scores[s.id] = drop;
     s.total += scores[s.id];
   });
 
@@ -238,22 +249,57 @@ export const show = (game, seatId) => {
     }
   });
 
-  game.history.push({ round: game.round, callerId: seatId, result, scores });
+  game.history.push({ round: game.round, callerId, result, scores });
   game.lastShow = {
     round: game.round,
-    callerId: seatId,
+    callerId,
     result,
     jokerRank: game.jokerRank,
+    dropPoints: drop,
     eliminated,
-    entries: active.map((s) => ({ id: s.id, hand: s.hand, count: counts[s.id], score: scores[s.id], total: s.total })),
+    entries: active.map((s) => ({
+      id: s.id,
+      dropped: !!s.dropped,
+      hand: s.dropped ? [] : s.hand,
+      count: s.dropped ? null : counts[s.id],
+      score: scores[s.id],
+      total: s.total,
+    })),
   };
   game.turn = null;
-  game.log.push({ type: 'show', seatId });
 
   if (activeSeats(game).length <= 1) finishGame(game, 'last-standing');
   else game.phase = 'summary';
 
   return { ok: true, result, scores, eliminated };
+};
+
+export const show = (game, seatId) => {
+  const check = canShow(game, seatId);
+  if (!check.ok) return check;
+  // Only players still in the round are compared; dropped players are out of it.
+  const { result, counts, scores } = scoreShow(roundSeats(game), seatId, game.jokerRank, game.settings.showPenalty);
+  game.log.push({ type: 'show', seatId });
+  return endRound(game, { callerId: seatId, result, scores, counts });
+};
+
+// Fold on your first turn: the hand is set aside and the seat scores the drop points.
+export const drop = (game, seatId) => {
+  const check = canDrop(game, seatId);
+  if (!check.ok) return check;
+  const seat = getSeat(game, seatId);
+  seat.dropped = true;
+  seat.hand = [];
+  game.log.push({ type: 'drop', seatId });
+
+  const left = roundSeats(game);
+  if (left.length === 1) {
+    // Everyone else dropped: the last player wins the round and scores 0.
+    return { ...endRound(game, { callerId: null, result: 'all-dropped', scores: { [left[0].id]: 0 }, counts: {} }), roundOver: true };
+  }
+  const next = nextActiveIndex(game, game.seats.indexOf(seat), true);
+  beginTurn(game, game.seats[next].id);
+  return { ok: true, roundOver: false };
 };
 
 // FR-27: discard the highest-value non-joker (highest joker if all jokers), draw from the deck.
@@ -305,9 +351,12 @@ export const viewFor = (game, viewerId) => {
       eliminated: s.eliminated,
       eliminatedRound: s.eliminatedRound,
       turnsThisRound: s.turnsThisRound,
+      dropped: !!s.dropped,
     })),
     hand: viewer ? viewer.hand : [],
     canShow: viewer ? canShow(game, viewer.id) : fail('Spectating.'),
+    canDrop: viewer ? canDrop(game, viewer.id) : fail('Spectating.'),
+    dropPoints: dropPoints(game),
     history: game.history,
     lastShow: showable ? game.lastShow : null,
     endReason: game.endReason,

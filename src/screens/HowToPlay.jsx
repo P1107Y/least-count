@@ -66,6 +66,11 @@ export default function HowToPlay({ onBack, backLabel = 'Back' }) {
           </ol>
           <p>You always draw after discarding, even if your discard matched the open card.</p>
 
+          <h3>Dropping</h3>
+          <p>
+            On your first turn of a round, before you discard, you can <strong>Drop</strong>: fold your hand and sit the round out for half the Show penalty (+25 with the default 50). If everyone else drops, the last player in wins the round with 0.
+          </p>
+
           <h3>Calling Show</h3>
           <ul>
             <li>At the start of your turn, before discarding, you may call Show — but not on your first turn of a round.</li>
@@ -75,7 +80,7 @@ export default function HowToPlay({ onBack, backLabel = 'Back' }) {
             <li>
               <strong>Anyone ties or beats you:</strong> you take +50. Only the lowest other player scores minus their count; the rest add their count.
             </li>
-            <li>If your count is below zero (or your hand is all jokers), there’s no penalty — you score your own negative count even if someone is lower.</li>
+            <li>If your count is zero or below, there’s no penalty — you score your own count even if someone is lower (A shows with 0, B has −1: A 0, B −1).</li>
           </ul>
         </section>
       </div>
