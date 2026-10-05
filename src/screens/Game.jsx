@@ -4,6 +4,7 @@ import { Standings } from '../components/ScorePanel.jsx';
 import { handCount, sortHand, signed, cardLabel, RANK_NAME } from '../cards.js';
 import { play } from '../sound.js';
 import { EmoteLayer, EmojiTray } from '../components/Emotes.jsx';
+import { useCardFlights } from '../components/cardFlights.js';
 
 const useNow = (active, interval = 200) => {
   const [now, setNow] = useState(Date.now());
@@ -41,10 +42,34 @@ const ANGLES = {
   6: [165, 207, 249, 291, 333, 375],
   7: [160, 197, 233, 270, 307, 343, 380],
 };
-const seatPosition = (i, k) => {
-  const angle = ANGLES[k]?.[i] ?? 180 + (i * 180) / (k - 1);
+// Portrait screens have a tall, narrow table: seats wrap further down the sides.
+const NARROW_ANGLES = {
+  1: [270],
+  2: [205, 335],
+  3: [180, 270, 360],
+  4: [165, 230, 310, 375],
+  5: [160, 212, 270, 328, 380],
+  6: [155, 200, 247, 293, 340, 385],
+  7: [150, 190, 230, 270, 310, 350, 390],
+};
+const seatPosition = (i, k, narrow = false) => {
+  const angle = (narrow ? NARROW_ANGLES : ANGLES)[k]?.[i] ?? 180 + (i * 180) / (k - 1);
   const rad = (angle * Math.PI) / 180;
-  return { left: `${50 + 41 * Math.cos(rad)}%`, top: `${54 + 40 * Math.sin(rad)}%` };
+  const [rx, ry, cy] = narrow ? [37, 41, 50] : [41, 40, 54];
+  return { left: `${50 + rx * Math.cos(rad)}%`, top: `${cy + ry * Math.sin(rad)}%` };
+};
+
+const NARROW_QUERY = '(max-width: 900px)';
+const useNarrow = () => {
+  const [narrow, setNarrow] = useState(() => window.matchMedia?.(NARROW_QUERY).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(NARROW_QUERY);
+    if (!mq) return undefined;
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
 };
 
 function TurnClock({ remaining, duration }) {
@@ -238,6 +263,24 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
   const glow = g.turnDuration && g.turnDeadline ? Math.max(0, Math.min(1, remaining / g.turnDuration)) : 1;
 
   // Clear selection whenever the hand or turn changes.
+  const narrow = useNarrow();
+  const flightLayer = useRef(null);
+  const seatOrder = useMemo(() => g.seats.filter((s) => !s.eliminated).map((s) => s.id), [g.seats]);
+  useCardFlights({ layerRef: flightLayer, events: room.events, myId, jokerRank: g.jokerRank, seatOrder });
+
+  // Each hand card gets its entry delay once: staggered when dealt, or held back
+  // until the flying card lands when it was drawn mid-round.
+  const entryDelay = useRef({ round: g.round, delays: {} });
+  if (entryDelay.current.round !== g.round) entryDelay.current = { round: g.round, delays: {}, dealt: false };
+  {
+    const { delays } = entryDelay.current;
+    const firstSight = !entryDelay.current.dealt;
+    g.hand.forEach((c, i) => {
+      if (delays[c.id] === undefined) delays[c.id] = firstSight ? { cls: 'deal-in', ms: i * 70 } : { cls: 'land-in', ms: 400 };
+    });
+    if (g.hand.length) entryDelay.current.dealt = true;
+  }
+
   const handKey = g.hand.map((c) => c.id).join(',');
   useEffect(() => setSelected([]), [handKey, g.turn?.seq, phase]);
 
@@ -342,6 +385,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
 
   return (
     <div className="game">
+      <div className="flight-layer" ref={flightLayer} aria-hidden="true" />
       <aside className="score-panel" aria-label="Scores">
         <div className="score-head">
           <h2>Standings</h2>
@@ -356,11 +400,13 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
         <div className="score-round small">After {g.history.length} {g.history.length === 1 ? 'round' : 'rounds'}</div>
         <div className="score-actions">
           <span className="muted small mono">Room {room.code}</span>
-          <button type="button" className="btn ghost small" onClick={onHelp}>
-            Rules
+          <button type="button" className="btn ghost small" onClick={onHelp} aria-label="Rules">
+            <span className="lbl-long">Rules</span>
+            <span className="lbl-short" aria-hidden="true">?</span>
           </button>
-          <button type="button" className="btn ghost small" onClick={() => setConfirmLeave(true)}>
-            Leave game
+          <button type="button" className="btn ghost small" onClick={() => setConfirmLeave(true)} aria-label="Leave game">
+            <span className="lbl-long">Leave game</span>
+            <span className="lbl-short" aria-hidden="true">🚪</span>
           </button>
         </div>
       </aside>
@@ -386,7 +432,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
             const seat = seatsById[id];
             const kickable = isHost && seat.kind === 'human' && seat.takeover !== 'kicked' && seat.takeover !== 'left';
             return (
-              <Opponent key={id} style={seatPosition(i, opponents.length)} compact={opponents.length >= 5} {...plate(id)}>
+              <Opponent key={id} style={seatPosition(i, opponents.length, narrow)} compact={opponents.length >= 5} {...plate(id)}>
                 {kickable && (
                   <button type="button" className="kick-btn" onClick={() => setKickTarget(id)} aria-label={`Kick ${seat.name}`} title={`Kick ${seat.name}`}>
                     Kick
@@ -426,10 +472,19 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
                 {pile.map((card, i) => {
                   const isTop = card.id === g.takeableId;
                   const depth = pile.length - 1 - i;
-                  return isTop && canTake ? (
-                    <PlayingCard key={card.id} card={card} jokerRank={jokerRank} size="md" takeable className="pile-card fly-in" onClick={() => doDraw('open')} title={`Take the ${cardLabel(card, jokerRank)}`} />
-                  ) : (
-                    <PlayingCard key={card.id} card={card} jokerRank={jokerRank} size="md" takeable={isTop && g.phase === 'playing'} dim={!isTop} className={`pile-card fly-in depth-${Math.min(depth, 3)}`} />
+                  return (
+                    <PlayingCard
+                      key={card.id}
+                      card={card}
+                      jokerRank={jokerRank}
+                      size="md"
+                      takeable={isTop && g.phase === 'playing'}
+                      dim={!isTop}
+                      className={`pile-card fly-in depth-${Math.min(depth, 3)}`}
+                      onClick={() => doDraw('open')}
+                      disabled={!(isTop && canTake)}
+                      title={isTop && canTake ? `Take the ${cardLabel(card, jokerRank)}` : undefined}
+                    />
                   );
                 })}
               </div>
@@ -440,7 +495,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
               <span className="slot-label">{pending.length ? (turnSeatId === myId ? 'Your discard' : `${displayName(pendingOwner)}’s discard`) : 'Discard'}</span>
               <div className="pending">
                 {pending.map((card) => (
-                  <PlayingCard key={card.id} card={card} jokerRank={jokerRank} size="md" className="fly-in" />
+                  <PlayingCard key={card.id} card={card} jokerRank={jokerRank} size="md" className="land-in" />
                 ))}
                 {!pending.length && <div className="pile-empty ghost">—</div>}
               </div>
@@ -453,7 +508,7 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
             positionOf={(seatId) => {
               if (seatId === myId) return { left: '50%', top: '92%' };
               const i = opponents.indexOf(seatId);
-              return i >= 0 ? seatPosition(i, opponents.length) : null;
+              return i >= 0 ? seatPosition(i, opponents.length, narrow) : null;
             }}
             nameOf={(seatId) => displayName(seatsById[seatId])}
           />
@@ -485,9 +540,10 @@ export default function Game({ room, you, send, clockOffset, emotes = [], onLeav
                   jokerRank={jokerRank}
                   size="lg"
                   selected={selected.includes(card.id)}
-                  onClick={myTurn && phase === 'discard' ? () => toggle(card.id) : undefined}
-                  className="deal-in"
-                  style={{ animationDelay: `${i * 70}ms` }}
+                  onClick={() => toggle(card.id)}
+                  disabled={!(myTurn && phase === 'discard')}
+                  className={entryDelay.current.delays[card.id]?.cls || 'deal-in'}
+                  style={{ animationDelay: `${entryDelay.current.delays[card.id]?.ms ?? i * 70}ms` }}
                 />
               ))}
               {!hand.length && myGame?.eliminated && <div className="hand-empty">Eliminated</div>}

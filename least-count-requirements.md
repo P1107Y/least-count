@@ -35,7 +35,7 @@ Confirmed on 3 Oct 2026.
 | R20 | Timeouts | Three timed-out turns in a row and the player is replaced by a bot |
 | R21 | No humans left | When every human has left or been eliminated, the game ends; bots do not play on |
 | R22 | Joining | Nobody can join a game in progress |
-| R23 | Platform | PC screens only in this version (desktop browser) |
+| R23 | Platform | Desktop, tablet and phone browsers (phones in portrait) |
 
 ### 1.1 Interpreted points
 

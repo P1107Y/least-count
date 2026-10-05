@@ -4,7 +4,7 @@ const isRed = (suit) => suit === 'H' || suit === 'D';
 
 export function PlayingCard({ card, jokerRank, size = 'md', selected, takeable, dim, onClick, disabled, className = '', title, style }) {
   const joker = card.rank === jokerRank;
-  const classes = ['pcard', `pcard-${size}`, isRed(card.suit) ? 'red' : 'black', joker && 'joker', selected && 'selected', takeable && 'takeable', dim && 'dim', onClick && 'clickable', className]
+  const classes = ['pcard', `pcard-${size}`, isRed(card.suit) ? 'red' : 'black', `suit-${card.suit}`, joker && 'joker', selected && 'selected', takeable && 'takeable', dim && 'dim', onClick && !disabled && 'clickable', className]
     .filter(Boolean)
     .join(' ');
   const face = (

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getSavedName } from '../net.js';
+import CardThemePicker from '../components/CardThemePicker.jsx';
 
 export const DIFFICULTY_INFO = {
   easy: 'Dumps its highest card and shows only with a very low hand.',
@@ -74,6 +75,10 @@ export default function BotSetup({ send, onBack }) {
               { value: 0, label: 'Off' },
             ]}
           />
+        </div>
+        <div className="field">
+          <span className="field-label">Card style</span>
+          <CardThemePicker />
         </div>
         <div className="row-actions">
           <button type="button" className="btn ghost" onClick={onBack}>

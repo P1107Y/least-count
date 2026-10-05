@@ -100,7 +100,11 @@ export default function App() {
         results={room.lastResults}
         you={you}
         penalty={room.settings.showPenalty}
-        onPlayAgain={() => setDismissedResults(`${room.code}:${room.lastResults.gameNumber}`)}
+        isHost={room.hostId === you?.seatId}
+        hostName={room.seats.find((s) => s.id === room.hostId)?.name}
+        seatCount={room.seats.length}
+        onRematch={() => send({ type: 'start' })}
+        onLobby={() => setDismissedResults(`${room.code}:${room.lastResults.gameNumber}`)}
         onHome={leave}
       />
     );
@@ -128,7 +132,8 @@ export default function App() {
               </button>
             )}
             <button type="button" className="btn ghost small" onClick={toggleMute} aria-pressed={muted}>
-              {muted ? '🔇 Sound off' : '🔊 Sound on'}
+              {muted ? '🔇' : '🔊'}
+              <span className="lbl-long">{muted ? ' Sound off' : ' Sound on'}</span>
             </button>
           </div>
         </header>
@@ -142,6 +147,14 @@ export default function App() {
         </div>
       )}
       <main className="app-main">{screen}</main>
+      {inGame && (
+        <div className="rotate-hint" role="status">
+          <span className="rotate-icon" aria-hidden="true">
+            📱
+          </span>
+          Turn your phone upright to play
+        </div>
+      )}
       {showHelp && (
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="How to play" onClick={() => setShowHelp(false)}>
           <div className="modal modal-wide" onClick={(e) => e.stopPropagation()}>

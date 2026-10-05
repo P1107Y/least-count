@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Segmented, DIFFICULTY_INFO } from './BotSetup.jsx';
+import CardThemePicker from '../components/CardThemePicker.jsx';
 
 const inviteLink = (code) => `${window.location.origin}/?room=${code}`;
 
@@ -209,6 +210,10 @@ export default function Lobby({ room, you, send, onLeave }) {
       <aside className="panel lobby-side">
         <h2 className="section-title">Room settings</h2>
         <SettingsPanel key={`${room.settings.eliminationScore}-${room.settings.showPenalty}`} room={room} isHost={isHost} send={send} />
+        <h2 className="section-title theme-title">
+          Your card style <span className="muted small">only on your screen</span>
+        </h2>
+        <CardThemePicker />
         <div className="lobby-start">
           {isHost ? (
             <>

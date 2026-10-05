@@ -4,7 +4,7 @@ import { play } from '../sound.js';
 
 const ordinal = (n) => ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
 
-export default function Results({ results, you, penalty, onPlayAgain, onHome }) {
+export default function Results({ results, you, penalty, isHost, hostName, seatCount, onRematch, onLobby, onHome }) {
   const winner = results.ranking[0];
   const iWon = winner?.id === you?.seatId;
   useEffect(() => {
@@ -33,12 +33,24 @@ export default function Results({ results, you, penalty, onPlayAgain, onHome }) 
             </li>
           ))}
         </ol>
+        {isHost ? (
+          <div className="rematch">
+            <button type="button" className="btn primary block rematch-btn" onClick={onRematch} disabled={seatCount < 2}>
+              ↻ Rematch
+            </button>
+            <span className="field-hint">{seatCount < 2 ? 'Everyone else has left — invite players from the lobby.' : `Same ${seatCount} players, same settings, fresh scores.`}</span>
+          </div>
+        ) : (
+          <p className="waiting">
+            <span className="spinner small" aria-hidden="true" /> Waiting for {hostName || 'the host'} to start a rematch…
+          </p>
+        )}
         <div className="row-actions">
           <button type="button" className="btn ghost" onClick={onHome}>
             Back to home
           </button>
-          <button type="button" className="btn primary" onClick={onPlayAgain}>
-            Play again
+          <button type="button" className="btn" onClick={onLobby}>
+            Go to lobby
           </button>
         </div>
       </section>
