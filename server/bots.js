@@ -97,14 +97,14 @@ const chooseDraw = (view, remaining, takeable, takeThreshold, { pairs = true } =
 
 const takeableFor = (view) => view.openPile.find((c) => c.id === view.takeableId) || null;
 
-// All jokers: a failed Show carries no penalty, so showing can only help.
-const allJokers = (view) => view.hand.every((c) => c.rank === view.jokerRank);
+// A negative hand (or all jokers) carries no penalty on a failed Show, so showing can only help.
+const noPenalty = (view) => view.hand.every((c) => c.rank === view.jokerRank) || handCount(view.hand, view.jokerRank) < 0;
 // Long rounds make waiting riskier (someone else will show), so bots grow bolder.
 const turnsTaken = (view) => view.seats.find((s) => s.id === view.seatId)?.turnsThisRound || 0;
 
 const decideEasy = (view) => {
   const count = handCount(view.hand, view.jokerRank);
-  if (view.canShow.ok && (allJokers(view) || count <= 5 + Math.floor(turnsTaken(view) / 5))) return { action: 'show' };
+  if (view.canShow.ok && (noPenalty(view) || count <= 5 + Math.floor(turnsTaken(view) / 5))) return { action: 'show' };
   const nonJokers = view.hand.filter((c) => c.rank !== view.jokerRank);
   // Its highest card, along with any other copies of that rank.
   const top = nonJokers.length ? nonJokers.reduce((best, c) => (cardValue(c, view.jokerRank) > cardValue(best, view.jokerRank) ? c : best)) : null;
@@ -132,7 +132,7 @@ const pickDiscard = (view, avoidRanks = new Set()) => {
 const decideMedium = (view) => {
   const count = handCount(view.hand, view.jokerRank);
   if (view.canShow.ok) {
-    if (allJokers(view)) return { action: 'show' };
+    if (noPenalty(view)) return { action: 'show' };
     const minOppCards = Math.min(...opponents(view).map((s) => s.cardCount));
     const base = minOppCards >= 4 ? 7 : minOppCards === 3 ? 5 : minOppCards === 2 ? 3 : 1;
     if (count <= base + Math.floor(turnsTaken(view) / 6)) return { action: 'show' };
@@ -147,7 +147,7 @@ const decideHard = (view, penalty) => {
   const { estimates, mean, pickedRanks } = estimateOpponents(view);
 
   if (view.canShow.ok) {
-    if (allJokers(view)) return { action: 'show' };
+    if (noPenalty(view)) return { action: 'show' };
     // Chance that every opponent is strictly above our count.
     const p = estimates.reduce((acc, e) => acc * phi((e.estimate - count - 0.5) / e.spread), 1);
     // Win probability needed so the reward (dropping |count| plus avoiding adding it later)

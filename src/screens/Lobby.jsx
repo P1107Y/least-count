@@ -201,7 +201,7 @@ export default function Lobby({ room, you, send, onLeave }) {
             <button type="button" className="btn" disabled={full || botCap} onClick={() => send({ type: 'addBot', difficulty: botDifficulty })}>
               + Add bot
             </button>
-            <span className="field-hint">{full ? 'All 6 seats are taken.' : botCap ? 'A game can have at most 4 bots.' : DIFFICULTY_INFO[botDifficulty]}</span>
+            <span className="field-hint">{full ? `All ${room.limits.maxSeats} seats are taken.` : botCap ? 'A game can have at most 4 bots.' : DIFFICULTY_INFO[botDifficulty]}</span>
           </div>
         )}
       </section>

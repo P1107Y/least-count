@@ -67,6 +67,18 @@ test('acceptance 7: a hand with a joker but not all jokers still takes the penal
   assert.deepEqual(r.scores, { A: 50, B: -4 });
 });
 
+test('negative caller is never penalised, even when someone is lower', () => {
+  // Joker is 5: A holds 5 + 4 = -1, B holds 5, 5 = -10, C holds 6.
+  const r = score({ A: [c('5'), c('4')], B: [c('5', 'H'), c('5', 'D')], C: [c('6')] }, '5');
+  assert.equal(r.result, 'exempt');
+  assert.deepEqual(r.scores, { A: -1, B: -10, C: 6 });
+});
+
+test('caller at exactly 0 who is beaten still takes the penalty', () => {
+  const r = score({ A: [c('5'), c('5', 'H'), c('10')], B: [c('5', 'D')] }, '5');
+  assert.deepEqual(r.scores, { A: 50, B: -5 });
+});
+
 test('acceptance 8: caller with 0 scores 0', () => {
   const r = score({ A: [c('5'), c('5', 'H'), c('10')], B: handOf(3), C: handOf(12) }, '5');
   assert.deepEqual(r.scores, { A: 0, B: 3, C: 12 });
@@ -102,7 +114,7 @@ const playTurn = (game, source = 'deck') => {
 };
 
 test('deal: 5 cards each, joker indicator and open card, deck size (acceptance 19)', () => {
-  for (const [n, decks] of [[2, 1], [4, 1], [5, 2], [6, 2]]) {
+  for (const [n, decks] of [[2, 1], [4, 1], [5, 2], [6, 2], [8, 2]]) {
     const game = newGame(n);
     const total = game.seats.reduce((s, x) => s + x.hand.length, 0) + game.deck.length + game.openPile.length + 1;
     assert.equal(total, 52 * decks, `${n} players`);

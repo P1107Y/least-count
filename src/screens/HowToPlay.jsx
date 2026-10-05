@@ -26,7 +26,7 @@ export default function HowToPlay({ onBack, backLabel = 'Back' }) {
 
           <h3>Setup</h3>
           <ul>
-            <li>2–6 players. One deck for up to 4 players, two decks for 5–6.</li>
+            <li>2–8 players. One deck for up to 4 players, two decks for 5–8.</li>
             <li>Everyone gets 5 cards. One card is turned up as the <strong>joker indicator</strong>: every card of that rank is a joker this round.</li>
             <li>Another card starts the open pile. The rest is the closed deck.</li>
           </ul>
@@ -75,7 +75,7 @@ export default function HowToPlay({ onBack, backLabel = 'Back' }) {
             <li>
               <strong>Anyone ties or beats you:</strong> you take +50. Only the lowest other player scores minus their count; the rest add their count.
             </li>
-            <li>If your hand is all jokers, there’s no penalty — you score your (negative) count.</li>
+            <li>If your count is below zero (or your hand is all jokers), there’s no penalty — you score your own negative count even if someone is lower.</li>
           </ul>
         </section>
       </div>

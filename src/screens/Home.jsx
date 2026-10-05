@@ -56,7 +56,7 @@ export default function Home({ send, inviteCode, onBots, onHowTo, defaultName, c
           Hold the <em>least</em>.<br />
           Call the Show.
         </h1>
-        <p className="lede">A fast card game for 2–6 players. Shed your high cards, hoard the jokers, and call Show when you think your hand counts lowest. Get it wrong and you eat 50 points.</p>
+        <p className="lede">A fast card game for 2–8 players. Shed your high cards, hoard the jokers, and call Show when you think your hand counts lowest. Get it wrong and you eat 50 points.</p>
         <div className="hero-cards" aria-hidden="true">
           <div className="pcard pcard-lg black tilt-1">
             <span className="pcard-corner">

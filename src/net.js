@@ -41,6 +41,7 @@ export function useGameSocket() {
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
   const [clockOffset, setClockOffset] = useState(0);
+  const [emotes, setEmotes] = useState([]);
   const socketRef = useRef(null);
   const retryRef = useRef(0);
 
@@ -70,6 +71,9 @@ export function useGameSocket() {
           setRoom(data.room);
           setYou(data.you);
           setReady(true);
+        } else if (data.type === 'emote') {
+          const at = Date.now();
+          setEmotes((list) => [...list.filter((e) => at - e.at < 4000).slice(-15), { ...data, at }]);
         } else if (data.type === 'error') {
           setError({ message: data.message, at: Date.now() });
         } else if (data.type === 'kicked' || data.type === 'replaced') {
@@ -110,5 +114,5 @@ export function useGameSocket() {
   const clearError = useCallback(() => setError(null), []);
   const clearNotice = useCallback(() => setNotice(null), []);
 
-  return { connected, ready, room, you, error, notice, clockOffset, send, clearError, clearNotice };
+  return { connected, ready, room, you, error, notice, clockOffset, emotes, send, clearError, clearNotice };
 }

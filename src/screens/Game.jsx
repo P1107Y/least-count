@@ -3,6 +3,7 @@ import { PlayingCard, CardBack } from '../components/Card.jsx';
 import { Standings } from '../components/ScorePanel.jsx';
 import { handCount, sortHand, signed, cardLabel, RANK_NAME } from '../cards.js';
 import { play } from '../sound.js';
+import { EmoteLayer, EmojiTray } from '../components/Emotes.jsx';
 
 const useNow = (active, interval = 200) => {
   const [now, setNow] = useState(Date.now());
@@ -19,7 +20,7 @@ const displayName = (seat) => (seat ? (seat.kind === 'human' && seat.controller 
 const RESULT_TEXT = {
   success: 'Show succeeded',
   failed: 'Show failed — penalty',
-  exempt: 'Show failed — all jokers, no penalty',
+  exempt: 'Show failed — negative hand, no penalty',
 };
 
 const TAKEOVER_TEXT = {
@@ -30,7 +31,15 @@ const TAKEOVER_TEXT = {
 };
 
 // Opponents sit around the upper arc in turn order, starting on the local player's left (UI-6).
-const ANGLES = { 1: [270], 2: [215, 325], 3: [190, 270, 350] };
+const ANGLES = {
+  1: [270],
+  2: [215, 325],
+  3: [190, 270, 350],
+  4: [180, 240, 300, 360],
+  5: [175, 220, 270, 320, 365],
+  6: [165, 207, 249, 291, 333, 375],
+  7: [160, 197, 233, 270, 307, 343, 380],
+};
 const seatPosition = (i, k) => {
   const angle = ANGLES[k]?.[i] ?? 180 + (i * 180) / (k - 1);
   const rad = (angle * Math.PI) / 180;
@@ -78,10 +87,10 @@ function NamePlate({ seat, gameSeat, isTurn, glow, remaining, duration, isHostSe
   );
 }
 
-function Opponent({ seat, gameSeat, style, ...plate }) {
+function Opponent({ seat, gameSeat, style, compact, ...plate }) {
   const n = gameSeat.eliminated ? 0 : gameSeat.cardCount;
   return (
-    <div className={`opponent ${gameSeat.eliminated ? 'out' : ''}`} style={style}>
+    <div className={`opponent ${gameSeat.eliminated ? 'out' : ''} ${compact ? 'compact' : ''}`} style={style} data-seat={seat.id}>
       <div className="opp-cards" aria-label={`${n} cards`}>
         {Array.from({ length: n }, (_, i) => (
           <CardBack key={i} size="xs" className="fan" />
@@ -103,6 +112,9 @@ function RoundSummary({ g, seatsById, myId, me, send, now, clockOffset }) {
   const left = g.summaryDeadline ? Math.max(0, Math.ceil((g.summaryDeadline - (now + clockOffset)) / 1000)) : null;
   const voted = g.continueVotes.includes(myId);
   const canVote = me && me.kind === 'human' && me.controller === 'human';
+  const waitingFor = Object.values(seatsById)
+    .filter((s) => s.kind === 'human' && s.connected && s.controller === 'human' && !g.continueVotes.includes(s.id))
+    .map((s) => s.name);
   const entries = [...show.entries].sort((a, b) => (a.id === show.callerId ? -1 : b.id === show.callerId ? 1 : a.count - b.count));
   return (
     <div className="overlay" role="dialog" aria-modal="true" aria-label={`Round ${show.round} summary`}>
@@ -151,10 +163,13 @@ function RoundSummary({ g, seatsById, myId, me, send, now, clockOffset }) {
           </tbody>
         </table>
         <footer className="summary-foot">
-          <span className="muted">{left !== null ? `Next round in ${left}s` : ''}</span>
+          <span className="muted">
+            {left !== null ? `Next round in ${left}s` : ''}
+            {waitingFor.length > 0 && g.continueVotes.length > 0 ? ` · waiting for ${waitingFor.join(', ')}` : ''}
+          </span>
           {canVote && (
             <button type="button" className="btn primary" onClick={() => send({ type: 'continue' })} disabled={voted} autoFocus>
-              {voted ? 'Waiting for others…' : 'Continue'}
+              {voted ? `Starting in ${left ?? 0}s…` : 'Continue'}
             </button>
           )}
         </footer>
@@ -182,7 +197,7 @@ function ConfirmLeave({ onCancel, onConfirm }) {
   );
 }
 
-export default function Game({ room, you, send, clockOffset, onLeave, onHelp }) {
+export default function Game({ room, you, send, clockOffset, emotes = [], onLeave, onHelp }) {
   const g = room.game;
   const myId = you?.seatId;
   const seatsById = useMemo(() => Object.fromEntries(room.seats.map((s) => [s.id, s])), [room.seats]);
@@ -351,7 +366,7 @@ export default function Game({ room, you, send, clockOffset, onLeave, onHelp }) 
             const seat = seatsById[id];
             const kickable = isHost && seat.kind === 'human' && seat.takeover !== 'kicked' && seat.takeover !== 'left';
             return (
-              <Opponent key={id} style={seatPosition(i, opponents.length)} {...plate(id)}>
+              <Opponent key={id} style={seatPosition(i, opponents.length)} compact={opponents.length >= 5} {...plate(id)}>
                 {kickable && (
                   <button type="button" className="kick-btn" onClick={() => setKickTarget(id)} aria-label={`Kick ${seat.name}`} title={`Kick ${seat.name}`}>
                     Kick
@@ -413,6 +428,16 @@ export default function Game({ room, you, send, clockOffset, onLeave, onHelp }) 
             </div>
           </div>
 
+          <EmoteLayer
+            emotes={emotes}
+            positionOf={(seatId) => {
+              if (seatId === myId) return { left: '50%', top: '92%' };
+              const i = opponents.indexOf(seatId);
+              return i >= 0 ? seatPosition(i, opponents.length) : null;
+            }}
+            nameOf={(seatId) => displayName(seatsById[seatId])}
+          />
+
           <div className="table-toasts" aria-live="polite">
             {toasts.map((t) => (
               <div key={t.id} className="table-toast">
@@ -451,6 +476,8 @@ export default function Game({ room, you, send, clockOffset, onLeave, onHelp }) 
               {myTurn && phase === 'discard' && selectedCards.length > 0 && discardProblem ? <span className="hint-error">{discardProblem}</span> : hint}
             </p>
           </div>
+
+          <EmojiTray onSend={(emoji) => send({ type: 'emote', emoji })} />
 
           <div className="my-actions">
             {myTurn && phase === 'draw' ? (

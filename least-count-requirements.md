@@ -1,6 +1,6 @@
 # Least Count — App Requirements
 
-A multiplayer card game for 2–6 players where the goal is to hold the lowest hand count. Players can play against bots or create private rooms and invite friends. This version is for PC screens.
+A multiplayer card game for 2–8 players where the goal is to hold the lowest hand count. Players can play against bots or create private rooms and invite friends. This version is for PC screens.
 
 Reference for look and flow: https://leastcount.com/ — this app follows the same basic game, with the house rules below (negative scoring, rank-based negative jokers, 50-point penalty, elimination at 201).
 
@@ -16,9 +16,9 @@ Confirmed on 3 Oct 2026.
 | R2 | Winner's score | Lowest player scores **minus their count** (count 10 → −10) |
 | R3 | Joker value | Joker cards count as **minus their face value** (joker 5 → −5, joker K → −10, joker A → −1) |
 | R4 | Tie on Show | If anyone ties the caller, the Show fails and the caller takes the penalty |
-| R5 | Joker exemption | The penalty is waived only when the caller's hand is **all jokers** |
+| R5 | Penalty exemption | The penalty is waived when the caller's count is **below zero** (which includes an all-joker hand). The caller then scores their own negative count even if someone else is lower |
 | R6 | Discarding several cards | Cards must be the **same rank** (two 8s, three Kings). J + Q does not qualify even though both are worth 10 |
-| R7 | Deck | One 52-card deck for up to 4 players, two decks for 5–6 players. No printed jokers |
+| R7 | Deck | One 52-card deck for up to 4 players, two decks for 5–8 players. No printed jokers |
 | R8 | Deck runs out | The discarded cards are shuffled into a new closed deck, keeping the latest discard aside |
 | R9 | Sequences | Not supported (only same-rank multi-discards) |
 | R10 | Show on first turn | Not allowed. A player can call Show from their second turn of the round |
@@ -168,7 +168,7 @@ Let the caller be the player who called Show.
 
 ### 3.3 Seat limits (both modes)
 
-- Maximum **6 players** in a game, humans and bots combined.
+- Maximum **8 players** in a game, humans and bots combined.
 - Maximum **4 bots** added at the start of a game.
 - Minimum 2 players to start; at least 1 must be human.
 - Valid mixes include 1 human + 4 bots, 2 humans + 4 bots, 6 humans + 0 bots. A mix such as 1 human + 5 bots cannot be started.

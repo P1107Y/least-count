@@ -93,7 +93,7 @@ export default function App() {
     else if (view === 'bots') screen = <BotSetup send={send} onBack={() => setView('home')} />;
     else screen = <Home send={send} inviteCode={inviteCode} onBots={() => setView('bots')} onHowTo={() => setView('howto')} defaultName={getSavedName()} connected={connected} />;
   } else if (room.status === 'playing' && room.game) {
-    screen = <Game room={room} you={you} send={send} clockOffset={net.clockOffset} onLeave={leave} onHelp={() => setShowHelp(true)} />;
+    screen = <Game room={room} you={you} send={send} clockOffset={net.clockOffset} emotes={net.emotes} onLeave={leave} onHelp={() => setShowHelp(true)} />;
   } else if (room.lastResults && dismissedResults !== `${room.code}:${room.lastResults.gameNumber}`) {
     screen = (
       <Results

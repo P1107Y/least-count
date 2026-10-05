@@ -6,7 +6,7 @@ import { decideBot, BOT_NAMES } from './bots.js';
 import { checkName } from './names.js';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export const LIMITS = { maxSeats: 6, maxBots: 4, minSeats: 2 };
+export const LIMITS = { maxSeats: 8, maxBots: 4, minSeats: 2 };
 export const TIMER_OPTIONS = [15, 30, 60, 0];
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const DEFAULT_SETTINGS = { eliminationScore: 201, showPenalty: 50, turnTimer: 30 };
@@ -14,6 +14,9 @@ const DEFAULT_SETTINGS = { eliminationScore: 201, showPenalty: 50, turnTimer: 30
 const RECONNECT_GRACE_MS = 60_000;
 const EMPTY_ROOM_CLOSE_MS = 60_000;
 const SUMMARY_MS = 12_000;
+const CONTINUE_GRACE_MS = 3_000;
+const EMOTE_COOLDOWN_MS = 1_200;
+export const EMOTES = ['😂', '🔥', '😎', '😭', '🤡', '👏', '😡', '🤯', '🎉', '💸', '🙏', '👀'];
 const MAX_TIMEOUTS = 3;
 const MAX_EVENTS = 12;
 
@@ -260,7 +263,7 @@ class Room {
   addBot(bySeatId, difficulty) {
     const err = this.requireHost(bySeatId) || this.requireLobby();
     if (err) return err;
-    if (this.seats.length >= LIMITS.maxSeats) return 'All 6 seats are taken.';
+    if (this.seats.length >= LIMITS.maxSeats) return `All ${LIMITS.maxSeats} seats are taken.`;
     if (this.lobbyBots().length >= LIMITS.maxBots) return 'A game can have at most 4 bots.';
     const bot = this.addBotSeat(difficulty);
     this.event('join', { seatId: bot.id });
@@ -356,7 +359,7 @@ class Room {
     const err = this.requireHost(bySeatId) || this.requireLobby();
     if (err) return err;
     if (this.seats.length < LIMITS.minSeats) return 'At least 2 players are needed to start.';
-    if (this.seats.length > LIMITS.maxSeats) return 'A game can have at most 6 players.';
+    if (this.seats.length > LIMITS.maxSeats) return `A game can have at most ${LIMITS.maxSeats} players.`;
     if (!this.humans().length) return 'At least one human player is needed.';
     if (this.lobbyBots().length > LIMITS.maxBots) return 'A game can have at most 4 bots.';
 
@@ -550,7 +553,20 @@ class Room {
     this.continueVotes.add(seatId);
     // FR-24: continue early once every connected human in control has clicked.
     const waiting = this.humans().filter((s) => s.connected && s.controller === 'human' && !this.continueVotes.has(s.id));
-    if (!waiting.length) this.nextRound();
+    if (!waiting.length) {
+      this.nextRound();
+      return null;
+    }
+    // Someone is ready: shorten everyone else's wait instead of holding the full countdown.
+    const soon = Date.now() + CONTINUE_GRACE_MS;
+    if (this.summaryDeadline > soon) {
+      this.clearTimer('summary');
+      this.summaryDeadline = soon;
+      this.timers.summary = setTimeout(() => {
+        this.timers.summary = null;
+        this.nextRound();
+      }, CONTINUE_GRACE_MS);
+    }
     return null;
   }
 
@@ -635,6 +651,20 @@ class Room {
     if (!r.ok) return r.reason;
     this.seat(seatId).timeouts = 0;
     this.afterShow(this.seat(seatId));
+    return null;
+  }
+
+  // Emoji chat: sent straight to everyone, not stored in room state.
+  emote(seatId, emoji) {
+    const seat = this.seat(seatId);
+    if (!seat) return 'You are not seated in this room.';
+    if (!EMOTES.includes(emoji)) return 'Unknown emoji.';
+    const now = Date.now();
+    if (seat.lastEmoteAt && now - seat.lastEmoteAt < EMOTE_COOLDOWN_MS) return null;
+    seat.lastEmoteAt = now;
+    this.eventSeq += 1;
+    const payload = { type: 'emote', id: this.eventSeq, seatId, emoji };
+    this.conns.forEach((conn) => send(conn, payload));
     return null;
   }
 
@@ -797,12 +827,13 @@ export class RoomManager {
       show: () => room.show(seatId),
       continue: () => room.continueVote(seatId),
       reclaim: () => room.reclaim(seatId),
+      emote: () => room.emote(seatId, msg.emoji),
     };
     const action = actions[msg.type];
     if (!action) return 'Unknown action.';
     const err = action();
     if (err) return err;
-    if (this.rooms.has(room.code)) room.afterChange();
+    if (msg.type !== 'emote' && this.rooms.has(room.code)) room.afterChange();
     return null;
   }
 }

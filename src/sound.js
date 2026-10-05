@@ -67,6 +67,7 @@ const SOUNDS = {
   eliminated: () => tone(220, 0, 0.6, { type: 'square', gain: 0.05, slide: -110 }),
   win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, i * 0.12, 0.3, { type: 'triangle' })),
   error: () => tone(180, 0, 0.15, { type: 'square', gain: 0.04 }),
+  pop: () => tone(740, 0, 0.09, { gain: 0.06, slide: 260 }),
 };
 
 export const play = (name) => {

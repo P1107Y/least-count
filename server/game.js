@@ -193,7 +193,8 @@ export const scoreShow = (entries, callerId, jokerRank, penalty) => {
     return { result: 'success', counts, scores };
   }
 
-  const exempt = isAllJokers(caller.hand, jokerRank);
+  // No penalty when the caller's hand is all jokers or counts below zero.
+  const exempt = isAllJokers(caller.hand, jokerRank) || callerCount < 0;
   scores[callerId] = exempt ? callerCount : penalty;
   const lowest = Math.min(...others.map((e) => counts[e.id]));
   others.forEach((e) => {
